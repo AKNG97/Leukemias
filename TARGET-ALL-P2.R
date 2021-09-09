@@ -58,6 +58,16 @@ rnas1$grupo[bool] <- "TALL-BM"
 rnas1$grupo <- as.factor(rnas1$grupo)
 rnas1 <- rnas1[,!is.na(rnas1$grupo)]
 
+
+#Generar QCReport_Before
+
+factorsALL <- rnas.before$grupo
+factorsALL <- as.data.frame(factorsALL)
+factorsALL <- cbind(factorsALL, rnas.before$sample)
+colnames(factorsALL) <- c("grupo", "samples")
+
+#Normalización
+
 ln.data <- withinLaneNormalization(assay(rnas1), annot1$Length, which = "full")
 gcn.data <- withinLaneNormalization(ln.data , annot1$GC, which = "full")
 norm.counts <- tmm(gcn.data, long = 1000, lc = 0, k = 0)
