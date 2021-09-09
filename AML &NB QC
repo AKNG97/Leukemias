@@ -1,0 +1,123 @@
+library("BiocParallel")
+library("parallel")
+library("NOISeq")
+ #Levels
+ facto.MRC.BM <- factor[factor$grupos==1 , ]
+facto.MRC.PB <- factor[factor$grupos==2 , ]
+facto.MRC.rBM <- factor[factor$grupos==3 , ]
+facto.MRC.rPB <- factor[factor$grupos==4 , ]
+facto.NPM1.BM <- factor[factor$grupos==5 , ]
+facto.NPM1.PB <- factor[factor$grupos==6 , ]
+facto.NPM1.rBM <- factor[factor$grupos==7 , ]
+facto.NPM1.rPB <- factor[factor$grupos==8 , ]
+factoBN <- factor[factor$grupos==9 , ]
+
+muestras <- colData(rnas1)$sample
+grupos <- colData(rnas1)$grupo
+factor <- cbind(grupos, muestras)
+factor <- as.data.frame(factor)
+row.names(factor)<-factor$muestras
+factoBN <- factor[factor$grupos==9 , ]
+
+row.names(rnas1)<-rowData(rnas1)$ensembl_gene_id
+#Blood_Normal <- rnas1[, rnas1$grupo == "Blood Derived Normal"]
+#AML.NPM1_PB <- rnas1[, rnas1$grupo == "AML.NPM1-PB"]
+AML.MRC_PB <- rnas1[, rnas1$grupo == "AML.MRC-PB"]
+AML.NPM1_BM <- rnas1[, rnas1$grupo == "AML.NPM1-BM"]
+AML.MRC_BM <- rnas1[, rnas1$grupo == "AML.MRC-BM"]
+AML.NPM1_rPB <- rnas1[, rnas1$grupo == "AML.NPM1-rPB"]
+AML.MRC_rPB <- rnas1[, rnas1$grupo == "AML.MRC-rPB"]
+AML.NPM1_rBM <- rnas1[, rnas1$grupo == "AML.NPM1-rBM"]
+AML.MRC_rBM <- rnas1[, rnas1$grupo == "AML.MRC-rBM"]
+
+muestras <- colData(rnas1)$sample
+grupos <- colData(rnas1)$grupo
+factor <- cbind(grupos, muestras)
+factor <- as.data.frame(factor)
+
+inter <- intersect(rownames(rnas), annot$ensembl_gene_id)
+rnas.bf <- rnas[rownames(rnas) %in% inter,]
+annot.bf <- annot[annot$ensembl_gene_id %in% inter,]
+#annot.bf <- annot.bf[!duplicated(annot.bf$Gene.name),]
+
+row.names(rnas.bf)<-rowData(rnas.bf)$ensembl_gene_id
+row.names(annot.bf)<-annot.bf$ensembl_gene_id
+row.names(factor)<-factor$muestras
+
+#Blood_Normal.bf <- rnas.bf[, rnas.bf$grupo == "Blood Derived Normal"]
+#AML.NPM1_PB.bf <- rnas.bf[, rnas.bf$grupo == "AML.NPM1-PB"]
+AML.MRC_PB.bf <- rnas.bf[, rnas.bf$grupo == "AML.MRC-PB"]
+AML.NPM1_BM.bf <- rnas.bf[, rnas.bf$grupo == "AML.NPM1-BM"]
+AML.MRC_BM.bf <- rnas.bf[, rnas.bf$grupo == "AML.MRC-BM"]
+AML.NPM1_rPB.bf <- rnas.bf[, rnas.bf$grupo == "AML.NPM1-rPB"]
+AML.MRC_rPB.bf <- rnas.bf[, rnas.bf$grupo == "AML.MRC-rPB"]
+AML.NPM1_rBM.bf <- rnas.bf[, rnas.bf$grupo == "AML.NPM1-rBM"]
+AML.MRC_rBM.bf <- rnas.bf[, rnas.bf$grupo == "AML.MRC-rBM"]
+
+mydata.bf <- NOISeq::readData(
+  data = assay(AML.NPM1_PB.bf),
+  factors = facto.NPM1.PB, 
+  length = annot.bf[,c("ensembl_gene_id", "Length")],
+  biotype = annot.bf[,c("ensembl_gene_id", "Type")], 
+  chromosome = annot.bf[,c("Chr", "Start", "End")], 
+  gc = annot.bf[, c("ensembl_gene_id", "GC")])
+
+w <- 1024
+h <- 1024
+p <- 24
+
+# Biodetection plot. Per group.
+mybiodetection.bf <- dat(mydata.bf, type="biodetection", k=0)
+png(filename="NPM1.PB_BF_biodetection.Rd_%03d.png",  width=w, height=h, pointsize=p)
+explo.plot(mybiodetection)
+
+
+# Count distribution per biotype. Using count per million, only for one sample
+
+mycountsbio <- dat(mydata.bf, factor = NULL, type = "countsbio")
+png(filename="NPM1.PB_BF_countsbio.png",  width=w, height=h, pointsize=p)
+explo.plot(mycountsbio, toplot = 1, samples = 1, plottype = "boxplot")
+
+## Count distribution per sample
+mycountsbio <- dat(mydata.bf, factor = NULL, type = "countsbio")
+png(filename =  "NPM1.PB_BF_protein_coding_boxplot.png", width=w*2, height=h, pointsize=p)
+explo.plot(mycountsbio, toplot = "protein_coding",
+           samples = NULL, plottype = "boxplot")
+
+png(filename =  "NPM1.PB_BF_protein_coding_barplot.png", width=w*2, height=h, pointsize=p)
+explo.plot(mycountsbio, toplot = "protein_coding",
+           samples = NULL, plottype = "barplot")
+
+mycountsbio <- dat(mydata.bf, type = "countsbio")
+
+## Count distribution per Experimental factors
+png(filename= "NPM1.PB_BF_protein_coding_boxplot_group.png", width=w, height=h, pointsize=p)
+explo.plot(mycountsbio, toplot = "protein_coding",
+           samples = NULL, plottype = "boxplot")
+
+png(filename= "NPM1.PB_BF_protein_coding_barplot_group.png", width=w, height=h, pointsize=p)
+explo.plot(mycountsbio, toplot = "protein_coding",
+           samples = NULL, plottype = "barplot")
+
+## Saturation plot. 
+
+mysaturation <- dat(mydata.bf, k = 0, ndepth = 7, type = "saturation")
+png(filename= "NPM1.PB_BF_saturation.png", width=w, height=h, pointsize=p)
+explo.plot(mysaturation, toplot="protein_coding",
+           samples = c(1,3), yleftlim = NULL, yrightlim = NULL)
+
+## Length bias detection factor = "grupos"
+mylengthbias <- dat(mydata.bf, type="lengthbias")
+png(filename= "NPM1.PB_BF_Lengthbias.png", width=w, height=h, pointsize=p)
+explo.plot(mylengthbias, samples = 12, toplot = "global")
+
+##GC bias factor = "grupos"
+mygcbias <- dat(mydata.bf,  type="GCbias")
+png(filename="NPM1.PB_BF_GCbias.png",  width=w, height=h, pointsize=p)
+explo.plot(mygcbias, samples = 12, toplot = "global")
+
+## RNA composition
+mycomp <- dat(mydata.bf, type="cd")
+png(filename= "NPM1.PB_BF_RNAComposition.png", width=w, height=h, pointsize=p)
+explo.plot(mycomp, samples=1:12)
+
