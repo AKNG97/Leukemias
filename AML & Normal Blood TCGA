@@ -1,0 +1,114 @@
+library(SummarizedExperiment)
+library(TCGAbiolinks)
+require(EDASeq)
+require(dplyr)
+require(NOISeq)
+library(DESeq2)
+
+qry.rna <- GDCquery(project = "BEATAML1.0-COHORT",
+                    data.category= "Transcriptome Profiling",
+                    data.type = "Gene Expression Quantification",
+                    workflow.type = "HTSeq - Counts",)
+
+GDCdownload(qry.rna)
+
+d <- qry.rna[[1]][[1]]
+table(as.factor(d$sample_type))
+
+rnas <- GDCprepare(qry.rna, summarizedExperiment = TRUE)
+
+data <- assay(rnas)
+rownames(data) <- rowData(rnas)$external_gene_name
+rownames(rnas) <- rowData(rnas)$external_gene_name
+head(rownames(data))
+
+dim(data)
+dataFilt <- TCGAanalyze_Filtering(tabDF = data,
+                                  method = "quantile",
+                                  qnt.cut = 0.25)
+threshold <- round(dim(data)[2]/2)
+ridx <- rowSums(dataFilt == 0) <= threshold
+dataFilt <- dataFilt[ridx, ]
+print(dim(dataFilt))    
+ridx <- rowMeans(dataFilt) >= 10
+dataFilt <- dataFilt[ridx, ]
+print(dim(dataFilt))
+rnas <- rnas[rownames(rnas) %in% rownames(dataFilt), ]
+rnas <- rnas[!duplicated(rownames(rnas)),]
+
+annot<-read.delim(file="mart_export.txt", sep="\t")
+names(annot)<-c("Gene.name", "Chr", "Start", "End", "GC", "Type", "ensembl_gene_id")
+annot$Length <- abs(annot$End - annot$Start)
+inter <- intersect(rownames(rnas), annot$Gene.name)
+rnas1 <- rnas[rownames(rnas) %in% inter,]
+annot1 <- annot[annot$Gene.name %in% inter,]
+annot1 <- annot1[!duplicated(annot1$Gene.name),]
+
+# Columnas
+bool <- (rnas1$primary_diagnosis == "Acute myeloid leukemia with mutated NPM1") & (rnas1$sample_type == "Primary Blood Derived Cancer - Peripheral Blood")
+rnas1$grupo[bool] <- "AML.NPM1-PB"
+bool <- (rnas1$primary_diagnosis == "Acute myeloid leukemia with myelodysplasia-related changes") & (rnas1$sample_type == "Primary Blood Derived Cancer - Peripheral Blood")
+rnas1$grupo[bool] <- "AML.MRC-PB"
+bool <- (rnas1$primary_diagnosis == "Acute myeloid leukemia with mutated NPM1") & (rnas1$sample_type == "Primary Blood Derived Cancer - Bone Marrow")
+rnas1$grupo[bool] <- "AML.NPM1-BM"
+bool <- (rnas1$primary_diagnosis == "Acute myeloid leukemia with myelodysplasia-related changes") & (rnas1$sample_type == "Primary Blood Derived Cancer - Bone Marrow")
+rnas1$grupo[bool] <- "AML.MRC-BM"
+bool <- (rnas1$primary_diagnosis == "Acute myeloid leukemia with mutated NPM1") & (rnas1$sample_type == "Recurrent Blood Derived Cancer - Peripheral Blood")
+rnas1$grupo[bool] <- "AML.NPM1-rPB"
+bool <- (rnas1$primary_diagnosis == "Acute myeloid leukemia with myelodysplasia-related changes") & (rnas1$sample_type == "Recurrent Blood Derived Cancer - Peripheral Blood")
+rnas1$grupo[bool] <- "AML.MRC-rPB"
+bool <- (rnas1$primary_diagnosis == "Acute myeloid leukemia with mutated NPM1") & (rnas1$sample_type == "Recurrent Blood Derived Cancer - Bone Marrow")
+rnas1$grupo[bool] <- "AML.NPM1-rBM"
+bool <- (rnas1$primary_diagnosis == "Acute myeloid leukemia with myelodysplasia-related changes") & (rnas1$sample_type == "Recurrent Blood Derived Cancer - Bone Marrow")
+rnas1$grupo[bool] <- "AML.MRC-rBM"
+bool <- (rnas1$sample_type == "Blood Derived Normal")
+rnas1$grupo[bool] <- "Blood Derived Normal"
+rnas1$grupo <- as.factor(rnas1$grupo)
+rnas1 <- rnas1[,!is.na(rnas1$grupo)]
+
+ln.data <- withinLaneNormalization(assay(rnas1), annot1$Length, which = "full")
+gcn.data <- withinLaneNormalization(ln.data , annot1$GC, which = "full")
+norm.counts <- tmm(gcn.data, long = 1000, lc = 0, k = 0)
+noiseqData <- NOISeq::readData(norm.counts, factors = as.data.frame(rnas1$grupo))
+mydata2corr1 = NOISeq::ARSyNseq(noiseqData, norm = "n",  logtransf = FALSE)
+assay(rnas1) <- exprs(mydata2corr1)
+
+Blood_Normal <- rnas1[, rnas1$grupo == "Blood Derived Normal"]
+AML.NPM1_PB <- rnas1[, rnas1$grupo == "AML.NPM1-PB"]
+AML.MRC_PB <- rnas1[, rnas1$grupo == "AML.MRC-PB"]
+AML.NPM1_BM <- rnas1[, rnas1$grupo == "AML.NPM1-BM"]
+AML.MRC_BM <- rnas1[, rnas1$grupo == "AML.MRC-BM"]
+AML.NPM1_rPB <- rnas1[, rnas1$grupo == "AML.NPM1-rPB"]
+AML.MRC_rPB <- rnas1[, rnas1$grupo == "AML.MRC-rPB"]
+AML.NPM1_rBM <- rnas1[, rnas1$grupo == "AML.NPM1-rBM"]
+AML.MRC_rBM <- rnas1[, rnas1$grupo == "AML.MRC-rBM"]
+
+saveRDS(Blood_Normal, file="Blood_Normal.RDS")
+save(Blood_Normal, AML.MRC_BM, AML.MRC_PB, AML.MRC_rBM, AML.MRC_rPB, AML.NPM1_BM, AML.NPM1_PB, AML.NPM1_rBM, AML.NPM1_rPB, file = "Project BEATAML1_0_COHORT")
+
+mydata2 = readData(assay(rnas1), factors = as.data.frame(rnas1$grupo))
+myPCA = dat(mydata2, type = "PCA")
+explo.plot(myPCA)
+
+#Saving sample.ID
+cBlood_Normal <- colData(Blood_Normal)$submitter_id
+cAML.NPM1_PB <- colData(AML.NPM1_PB)$submitter_id
+cAML.MRC_PB <- colData(AML.MRC_PB)$submitter_id
+cAML.NPM1_BM <- colData(AML.NPM1_BM)$submitter_id
+cAML.MRC_BM <- colData(AML.MRC_BM)$submitter_id
+cAML.NPM1_rPB <- colData(AML.NPM1_rPB)$submitter_id
+cAML.MRC_rPB <- colData(AML.MRC_rPB)$submitter_id
+cAML.NPM1_rBM <- colData(AML.NPM1_rBM)$submitter_id
+cAML.MRC_rBM <- colData(AML.MRC_rBM)$submitter_id
+
+saveRDS(cBlood_Normal, file="cBlood_Normal.rds")
+saveRDS(cAML.NPM1_PB, file="cAML.NPM1_PB.rds")
+saveRDS(cAML.MRC_PB, file="cAML.MRC_PB.rds")
+saveRDS(cAML.NPM1_BM, file="cAML.NPM1_BM.rds")
+saveRDS(cAML.MRC_BM, file="cAML.MRC_BM.rds")
+saveRDS(cAML.NPM1_rPB, file="cAML.NPM1_rPB.rds")
+saveRDS(cAML.MRC_rPB, file="cAML.MRC_rPB.rds")
+saveRDS(cAML.NPM1_rBM, file="cAML.NPM1_rBM.rds")
+saveRDS(cAML.MRC_rBM, file="cAML.MRC_rBM.rds")
+
+
